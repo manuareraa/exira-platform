@@ -6,9 +6,12 @@ import {
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChevronRight,
+  faUpRightFromSquare,
+} from "@fortawesome/free-solid-svg-icons";
 import toast from "react-hot-toast";
-import { DiscoverWalletProviders } from "./DiscoverWalletProviders";
+import axios from "axios";
 
 function Navbar() {
   // State for managing mobile menu visibility
@@ -39,7 +42,46 @@ function Navbar() {
 
   useEffect(() => {
     // init();
-  }, []);
+    console.log("publicKey", publicKey, publicKey?.toBase58());
+  }, [publicKey]);
+
+  const handleUSDCdrop = async () => {
+    try {
+      const response = await axios.post(
+        import.meta.env.VITE_BACKEND_URL + "/usdc-drop",
+        {
+          toAddress: publicKey?.toBase58(), // Replace with the actual destination wallet address
+        }
+      );
+
+      console.log("USDC transferred successfully:", response.data);
+      toast.success("1000 Test USDC transferred successfully");
+    } catch (error) {
+      console.error(
+        "Error transferring USDC:",
+        error.response ? error.response.data : error.message
+      );
+    }
+  };
+
+  const handleSOLdrop = async () => {
+    try {
+      const response = await axios.post(
+        import.meta.env.VITE_BACKEND_URL + "/sol-drop",
+        {
+          destination: publicKey?.toBase58(), // Replace with actual destination wallet address
+        }
+      );
+
+      console.log("SOL transferred successfully:", response.data);
+      toast.success("0.01 SOL transferred successfully");
+    } catch (error) {
+      console.error(
+        "Error transferring SOL:",
+        error.response ? error.response.data : error.message
+      );
+    }
+  };
 
   return (
     <nav className="relative flex flex-wrap items-center justify-between w-full p-4 md:px-10 py-7">
@@ -99,9 +141,13 @@ function Navbar() {
                   ? "underline font-bold"
                   : ""
               }`}
-              onClick={() =>
-                handleNavigate(`/${item.toLowerCase().replace(/\s+/g, "-")}`)
-              }
+              onClick={() => {
+                if (item === "Home") {
+                  handleNavigate("/");
+                } else {
+                  handleNavigate(`/${item.toLowerCase().replace(/\s+/g, "-")}`);
+                }
+              }}
             >
               {item}
             </p>
@@ -110,7 +156,28 @@ function Navbar() {
 
         {/* Wallet and App buttons */}
         <div className="flex flex-col items-center gap-4 mt-4 md:flex-row md:mt-0">
-          {/* <WalletMultiButton
+          <button
+            className="flex flex-row items-center gap-x-3 h-full px-4 py-2 rounded-lg bg-alpha text-beta h-[40px] font-semibold"
+            onClick={() => {
+              // window.open("https://faucet.solana.com/", "_blank");
+              // toast.error("This feature is not available yet");
+              handleSOLdrop();
+            }}
+          >
+            <p>Get 0.01 SOL</p>
+            {/* <FontAwesomeIcon icon={faUpRightFromSquare} size="2xs" /> */}
+          </button>
+          <button
+            className="flex flex-row items-center gap-x-3 h-full px-4 py-2 rounded-lg bg-alpha text-beta h-[40px] font-semibold"
+            onClick={() => {
+              // window.open("https://faucet.solana.com/", "_blank");
+              // toast.error("This feature is not available yet");
+              handleUSDCdrop();
+            }}
+          >
+            <p>Get 1000 Test USDC</p>
+          </button>
+          <WalletMultiButton
             // className="flex justify-center w-full px-4 py-2 text-sm text-white bg-black rounded-lg md:w-40"
             style={{
               backgroundColor: "black",
@@ -120,28 +187,23 @@ function Navbar() {
               fontSize: "15px",
               borderRadius: "10px",
             }}
-          /> */}
-          {/* <button
-            className="flex items-center justify-center w-full h-10 px-6 py-2 text-black border-2 rounded-lg bg-gamma border-gamma md:w-auto"
-            onClick={handleGoToApp}
-          >
-            <div className="flex items-center gap-2">
-              <p>Connect Wallet</p>
-            </div>
-          </button> */}
-          <DiscoverWalletProviders />
+          />
 
           {/* Conditionally render "Exira App" button */}
           {!location.pathname.includes("/dashboard") && (
-            <button
-              className="flex items-center justify-center w-full h-10 px-6 py-2 text-black border-2 rounded-lg bg-gamma border-gamma md:w-auto"
-              onClick={handleGoToApp}
-            >
-              <div className="flex flex-row items-center justify-center gap-2">
-                <p>Exira App</p>
-                <FontAwesomeIcon icon={faChevronRight} size="2xs" />
-              </div>
-            </button>
+            <>
+              {connection && publicKey ? (
+                <button
+                  className="flex items-center justify-center w-full h-10 px-6 py-2 border-2 rounded-lg text-beta bg-alpha border-alpha md:w-auto"
+                  onClick={handleGoToApp}
+                >
+                  <div className="flex flex-row items-center justify-center gap-2">
+                    <p>Exira App</p>
+                    <FontAwesomeIcon icon={faChevronRight} size="2xs" />
+                  </div>
+                </button>
+              ) : null}
+            </>
           )}
 
           {/* Uncomment below to enable WalletDisconnectButton if needed */}

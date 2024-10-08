@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useNavigate } from "react-router-dom";
@@ -11,11 +11,55 @@ import {
   faRightLeft,
   faSeedling,
   faUser,
+  faArrowRightArrowLeft,
+  faHandHoldingDollar,
 } from "@fortawesome/free-solid-svg-icons";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-adapters";
+import { mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata";
+
+import { usePropertiesStore } from "../../state-management/store";
 
 const Dashboard: React.FC = ({ children }) => {
   const navigate = useNavigate();
   const [activeMenu, setActiveMenu] = useState<string>("All Properties");
+  const {
+    fetchProperties,
+    properties,
+    fetchPriceData,
+    fetchSellOrders,
+    fetchOnChainMasterEditionData,
+    fetchUserProperties,
+    fetchUserTxns,
+    fetchSellOrdersForAUser,
+  } = usePropertiesStore();
+
+  const wallet = useWallet();
+  const { connection } = useConnection();
+  const umi = createUmi(connection)
+    .use(walletAdapterIdentity(wallet))
+    // this is for minting programmable NFTs
+    .use(mplTokenMetadata());
+
+  useEffect(() => {
+    console.log("Properties from state: ", properties);
+    fetchProperties();
+    fetchPriceData();
+    fetchSellOrders();
+    fetchUserTxns(umi.identity?.publicKey);
+    fetchUserProperties(umi, umi.identity?.publicKey);
+    fetchSellOrdersForAUser(umi.identity?.publicKey);
+  }, []);
+
+  // useEffect(() => {
+  //   if (umi !== undefined || umi !== null) {
+  //     if (umi.identity?.publicKey) {
+  //       // fetchUserProperties(umi, umi.identity?.publicKey);
+  //       fetchUserTxns(umi.identity?.publicKey);
+  //     }
+  //   }
+  // }, [umi]);
 
   const menuItems = [
     { name: "All Properties", icon: faHouse, path: "/dashboard" },
@@ -25,6 +69,12 @@ const Dashboard: React.FC = ({ children }) => {
       path: "/dashboard/launchpad",
     },
     { name: "Buy / Trade", icon: faCoins, path: "/dashboard/trade" },
+    // { name: "Sell", icon: faHandHoldingDollar, path: "/dashboard/sell" },
+    // {
+    //   name: "Transfer",
+    //   icon: faArrowRightArrowLeft,
+    //   path: "/dashboard/transfer",
+    // },
   ];
 
   const accountItems = [
@@ -114,6 +164,10 @@ const Dashboard: React.FC = ({ children }) => {
               ? "Your Portfolio"
               : location.pathname.includes("/history")
               ? "Transaction History"
+              : location.pathname.includes("/sell")
+              ? "Sell"
+              : location.pathname.includes("/transfer")
+              ? "Transfer"
               : "All Properties"}
           </h2>
           <div className="flex items-center space-x-4">

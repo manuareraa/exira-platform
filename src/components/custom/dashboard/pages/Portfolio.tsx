@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Table,
   TableHeader,
@@ -20,6 +20,8 @@ import { ChevronDownIcon } from "../icons/ChevronDownIcon";
 import Mapbox from "../sub-components/Mapbox";
 import Counter from "../../../animata/Counter";
 import YourPropertiesTable from "../sub-components/YourPropertiesTable";
+import { usePropertiesStore } from "../../../../state-management/store";
+import { useNavigate } from "react-router-dom";
 
 interface Property {
   id: number;
@@ -108,107 +110,160 @@ const dummyData: Property[] = [
 ];
 
 function Portfolio(props) {
+  const navigate = useNavigate();
+  const { userInvestments, userTransactions } = usePropertiesStore();
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [metadata, setMetadata] = useState({
+    totalProfit: 0,
+    totalCurrentPortfolioValue: 0,
+    totalPropertiesHeld: 0,
+    totalSharesHeld: 0,
+    properties: [],
+  });
+
+  useEffect(() => {
+    if (userInvestments) {
+      if (userInvestments.length !== 0) {
+        setMetadata({
+          totalProfit: userInvestments.totalProfit,
+          totalCurrentPortfolioValue:
+            userInvestments.totalCurrentPortfolioValue,
+          totalPropertiesHeld: userInvestments.totalPropertiesHeld,
+          totalSharesHeld: userInvestments.totalSharesHeld,
+          properties: userInvestments.properties,
+        });
+        setDataLoaded(true);
+      }
+    }
+  }, [userInvestments]);
   // Calculate stats
-  const propertiesWithYourShares = dummyData.filter(
-    (item) => item.yourShares !== undefined
-  );
+  // const propertiesWithYourShares = dummyData.filter(
+  //   (item) => item.yourShares !== undefined
+  // );
 
-  const totalInvestedAmount = propertiesWithYourShares.reduce((sum, item) => {
-    const ticketPrice = parseFloat(item.ticketPrice.replace("$", ""));
-    return sum + ticketPrice * (item.yourShares || 0);
-  }, 0);
+  // const totalInvestedAmount = propertiesWithYourShares.reduce((sum, item) => {
+  //   const ticketPrice = parseFloat(item.ticketPrice.replace("$", ""));
+  //   return sum + ticketPrice * (item.yourShares || 0);
+  // }, 0);
 
-  const totalOriginalAmount = propertiesWithYourShares.reduce((sum, item) => {
-    const originalPrice = parseFloat(item.originalTicketPrice.replace("$", ""));
-    return sum + originalPrice * (item.yourShares || 0);
-  }, 0);
+  // const totalOriginalAmount = propertiesWithYourShares.reduce((sum, item) => {
+  //   const originalPrice = parseFloat(item.originalTicketPrice.replace("$", ""));
+  //   return sum + originalPrice * (item.yourShares || 0);
+  // }, 0);
 
-  const totalProfit = totalInvestedAmount - totalOriginalAmount;
+  // const totalProfit = totalInvestedAmount - totalOriginalAmount;
 
-  const totalPropertiesOwned = propertiesWithYourShares.length;
+  // const totalPropertiesOwned = propertiesWithYourShares.length;
 
-  const totalSharesHeld = propertiesWithYourShares.reduce(
-    (sum, item) => sum + (item.yourShares || 0),
-    0
-  );
+  // const totalSharesHeld = propertiesWithYourShares.reduce(
+  //   (sum, item) => sum + (item.yourShares || 0),
+  //   0
+  // );
+
+  useEffect(() => {
+    console.log("userInvestments", userInvestments);
+  }, [userInvestments]);
 
   return (
-    <div className="flex flex-col w-full max-w-full px-4 mx-auto">
-      <div className="flex flex-row space-x-6">
-        <div className="w-1/2">
-          <div className="flex flex-col">
-            {/* 2x2 Number Stat Grids */}
-            <div className="text-left">
-              <p className="text-lg">Portfolio Stats</p>
-            </div>
-            <div className="py-0 my-0 divider before:bg-black/5 after:bg-black/5"></div>
-            <div className="grid grid-cols-2 gap-6 p-4 mb-6 text-center gap-y-6">
-              <div className="flex flex-col items-center justify-center py-10 text-black bg-black/10 gap-y-1 rounded-2xl">
-                <div className="flex flex-row items-end justify-center gap-x-3">
-                  <p className="text-4xl">$</p>
-                  <Counter
-                    targetValue={totalInvestedAmount}
-                    direction="up"
-                    format={(value) => `${value.toFixed(0)}`}
-                  />
+    <>
+      {dataLoaded === false ? null : (
+        <div className="flex flex-col w-full max-w-full px-4 mx-auto">
+          <div className="flex flex-row space-x-6">
+            <div className="w-1/2">
+              <div className="flex flex-col">
+                {/* 2x2 Number Stat Grids */}
+                <div className="text-left">
+                  <p className="text-lg">Portfolio Stats</p>
                 </div>
-                <div className="text-2xl">Total Invested Amount</div>
-              </div>
-              <div className="flex flex-col items-center justify-center py-8 text-black bg-black/10 gap-y-1 rounded-2xl">
-                <div className="flex flex-row items-end justify-center gap-x-3">
-                  <p className="text-4xl">$</p>
-                  <Counter
-                    targetValue={totalProfit}
-                    direction="up"
-                    format={(value) => `${value.toFixed(0)}`}
-                  />
-                </div>
-                <div className="text-2xl">Total Profit</div>
-              </div>
-              <div className="flex flex-col items-center justify-center py-10 text-black bg-black/10 gap-y-1 rounded-2xl">
-                <Counter
-                  targetValue={totalPropertiesOwned}
-                  direction="up"
-                  format={(value) => `${value.toFixed(0)}`}
-                />
-                <div className="text-2xl">Total Properties Owned</div>
-              </div>
-              <div className="flex flex-col items-center justify-center py-8 text-black bg-black/10 gap-y-1 rounded-2xl">
-                <Counter
-                  targetValue={totalSharesHeld}
-                  direction="up"
-                  format={(value) => `${value.toFixed(0)}`}
-                />
+                <div className="py-0 my-0 divider before:bg-black/5 after:bg-black/5"></div>
+                <div className="grid grid-cols-2 gap-6 p-4 mb-6 text-center gap-y-6">
+                  <div className="flex flex-col items-center justify-center py-10 text-black bg-black/10 gap-y-1 rounded-2xl">
+                    <div className="flex flex-row items-end justify-center gap-x-3">
+                      <p className="text-4xl">$</p>
+                      {metadata.totalCurrentPortfolioValue <= 0 ? (
+                        <p className="text-5xl font-bold text-black">0</p>
+                      ) : (
+                        <Counter
+                          targetValue={metadata.totalCurrentPortfolioValue}
+                          direction="up"
+                          format={(value) => `${value.toFixed(0)}`}
+                        />
+                      )}
+                    </div>
+                    <div className="text-2xl">Your Portfolio</div>
+                  </div>
+                  <div className="flex flex-col items-center justify-center py-8 text-black bg-black/10 gap-y-1 rounded-2xl">
+                    <div className="flex flex-row items-end justify-center gap-x-3">
+                      <p className="text-4xl">$</p>
+                      {metadata.totalProfit <= 0 ? (
+                        <p className="text-5xl font-bold text-black">0</p>
+                      ) : (
+                        <Counter
+                          targetValue={metadata.totalProfit}
+                          direction="up"
+                          format={(value) => `${value.toFixed(0)}`}
+                        />
+                      )}
+                    </div>
+                    <div className="text-2xl">Total Profit</div>
+                  </div>
+                  <div className="flex flex-col items-center justify-center py-10 text-black bg-black/10 gap-y-1 rounded-2xl">
+                    {metadata.totalPropertiesHeld <= 0 ? (
+                      <p className="text-5xl font-bold text-black">0</p>
+                    ) : (
+                      <Counter
+                        targetValue={metadata.totalPropertiesHeld}
+                        direction="up"
+                        format={(value) => `${value.toFixed(0)}`}
+                      />
+                    )}
 
-                <div className="text-2xl">Total Shares Held</div>
+                    <div className="text-2xl">Total Properties Owned</div>
+                  </div>
+                  <div className="flex flex-col items-center justify-center py-8 text-black bg-black/10 gap-y-1 rounded-2xl">
+                    {metadata.totalSharesHeld <= 0 ? (
+                      <p className="text-5xl font-bold text-black">0</p>
+                    ) : (
+                      <Counter
+                        targetValue={metadata.totalSharesHeld}
+                        direction="up"
+                        format={(value) => `${value.toFixed(0)}`}
+                      />
+                    )}
+                    <div className="text-2xl">Total Shares Held</div>
+                  </div>
+                </div>
+
+                {/* button */}
+                <div className="flex flex-row justify-center">
+                  <button
+                    className="w-full py-3 mx-4 text-lg text-white bg-black border-2 border-black rounded-xl hover:bg-white hover:text-black "
+                    onClick={() => navigate("/dashboard")}
+                  >
+                    Invest More
+                  </button>
+                </div>
               </div>
             </div>
-
-            {/* button */}
-            <div className="flex flex-row justify-center">
-              <button className="w-full py-3 mx-4 text-lg text-white bg-black border-2 border-black rounded-xl hover:bg-white hover:text-black ">
-                Invest More
-              </button>
+            {/* Mapbox Component */}
+            <div className="w-[50rem] h-[30rem]">
+              <div className="text-left">
+                <p className="text-lg">Locate your shares</p>
+              </div>
+              <div className="py-0 my-0 divider before:bg-black/5 after:bg-black/5"></div>
+              <Mapbox dummyData={dummyData} data={metadata.properties} />
             </div>
           </div>
-        </div>
-        {/* Mapbox Component */}
-        <div className="w-[50rem] h-[30rem]">
-          <div className="text-left">
-            <p className="text-lg">Locate your shares</p>
+
+          {/* Rest of your component (e.g., tables, additional UI elements) */}
+          <div className="pt-8 text-left">
+            <p className="text-lg">Your Properties</p>
           </div>
           <div className="py-0 my-0 divider before:bg-black/5 after:bg-black/5"></div>
-          <Mapbox dummyData={dummyData} />
+          <YourPropertiesTable dummyData={dummyData} />
         </div>
-      </div>
-
-      {/* Rest of your component (e.g., tables, additional UI elements) */}
-      <div className="pt-8 text-left">
-        <p className="text-lg">Your Properties</p>
-      </div>
-      <div className="py-0 my-0 divider before:bg-black/5 after:bg-black/5"></div>
-      <YourPropertiesTable dummyData={dummyData} />
-    </div>
+      )}
+    </>
   );
 }
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Table,
   TableHeader,
@@ -17,197 +17,241 @@ import {
 } from "@nextui-org/react";
 import { SearchIcon } from "../icons/SearchIcon";
 import { ChevronDownIcon } from "../icons/ChevronDownIcon";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCaretUp,
+  faCaretDown,
+  faArrowTrendDown,
+  faArrowTrendUp,
+} from "@fortawesome/free-solid-svg-icons";
 
-const propertyTypes = [
-  { uid: "residential", name: "Residential" },
-  { uid: "commercial", name: "Commercial" },
-  { uid: "industrial", name: "Industrial" },
-];
+import { useNavigate } from "react-router-dom";
+import { usePropertiesStore } from "../../../../state-management/store";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-adapters";
+import { mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata";
 
-const locations = [
-  { uid: "india", name: "India" },
-  { uid: "france", name: "France" },
-  { uid: "russia", name: "Russia" },
-  { uid: "usa", name: "USA" },
-];
-
-const priceRanges = [
-  { uid: "0-100", name: "$0 - $100" },
-  { uid: "101-500", name: "$101 - $500" },
-  { uid: "501-1000", name: "$501 - $1000" },
-  { uid: "1001+", name: "$1001+" },
-];
-
-const columns = [
-  { uid: "propertyName", name: "Property Name" },
-  { uid: "location", name: "Location" },
-  { uid: "propertyType", name: "Property Type" },
-  { uid: "ticketPrice", name: "Ticket Price" },
-  { uid: "currentPrice", name: "Current Price" },
-  { uid: "totalShares", name: "Total Shares" },
-  { uid: "actions", name: "Actions" },
-];
-
-interface Property {
-  id: number;
-  propertyName: string;
-  location: string;
-  country: string;
-  propertyType: string;
-  ticketPrice: string;
-  currentPrice: string;
-  totalShares: string;
-}
-
-const dummyData: Property[] = [
-  {
-    id: 1,
-    propertyName: "Riverside Apartments",
-    location: "Bengaluru, India",
-    country: "India",
-    propertyType: "Residential",
-    ticketPrice: "$25",
-    currentPrice: "Not Trading",
-    totalShares: "4533 / 6800",
-  },
-  {
-    id: 2,
-    propertyName: "Central Mall",
-    location: "Paris, France",
-    country: "France",
-    propertyType: "Commercial",
-    ticketPrice: "$345",
-    currentPrice: "Not Trading",
-    totalShares: "90 / 980",
-  },
-  {
-    id: 3,
-    propertyName: "Dzokevic Warehouse",
-    location: "St.Petersburg, Russia",
-    country: "Russia",
-    propertyType: "Industrial",
-    ticketPrice: "$85",
-    currentPrice: "$85.5 / share",
-    totalShares: "90 / 980",
-  },
-  {
-    id: 4,
-    propertyName: "Sunset Condos",
-    location: "Mumbai, India",
-    country: "India",
-    propertyType: "Residential",
-    ticketPrice: "$50",
-    currentPrice: "Not Trading",
-    totalShares: "2000 / 3000",
-  },
-  {
-    id: 5,
-    propertyName: "Tech Park",
-    location: "San Francisco, USA",
-    country: "USA",
-    propertyType: "Commercial",
-    ticketPrice: "$1200",
-    currentPrice: "$1250 / share",
-    totalShares: "50 / 100",
-  },
-];
+import solCoin from "../../../../assets/svg/sol-coin.svg";
+import usdcCoin from "../../../../assets/svg/usd-coin.svg";
+import usdtCoin from "../../../../assets/svg/usdt-coin.svg";
 
 export default function PropertyTable() {
-  const [filterValue, setFilterValue] = React.useState("");
-  const [propertyTypeFilter, setPropertyTypeFilter] = React.useState<Selection>(
+  const navigate = useNavigate();
+  const {
+    fetchProperties,
+    properties,
+    priceData,
+    setTotalAssetValue,
+    totalAssetValue,
+    onChainMasterEditionData,
+    fetchOnChainMasterEditionData,
+    sellOrderData,
+  } = usePropertiesStore();
+
+  const wallet = useWallet();
+  const { connection } = useConnection();
+  const umi = createUmi(connection)
+    .use(walletAdapterIdentity(wallet))
+    .use(mplTokenMetadata());
+
+  // Fetching on-chain data when properties are updated
+  useEffect(() => {
+    if (properties.length > 0) {
+      fetchOnChainMasterEditionData(umi, properties);
+    }
+  }, [properties]);
+
+  let tempAssetValue = 0;
+
+  // Process and flatten the property data
+  const processedProperties = useMemo(() => {
+    return properties.map((item) => {
+      const propertyType = item.JSONData.attributes.propertyType;
+      const initialSharePrice = parseFloat(
+        item.JSONData.attributes.initialSharePrice
+      );
+      const totalShares =
+        item.JSONData.attributes.initialPropertyValue /
+        item.JSONData.attributes.initialSharePrice;
+
+      // Calculate available shares based on trading status
+      let availableShares = 0;
+      if (item.Status === "trading" && sellOrderData[item.UUID]) {
+        availableShares = sellOrderData[item.UUID].orders.reduce(
+          (acc, order) => acc + order.quantity,
+          0
+        );
+        availableShares = totalShares - availableShares;
+      } else {
+        const edition = onChainMasterEditionData.find(
+          (edition) => edition.UUID === item.UUID
+        );
+        const maxSupply =
+          parseInt(edition?.collectionMetadata.edition.maxSupply.value) || 0;
+        const supply =
+          parseInt(edition?.collectionMetadata.edition.supply) || 0;
+        availableShares = maxSupply - supply;
+      }
+
+      let currentPrice =
+        item.Status === "trading"
+          ? priceData.find((price) => price.UUID === item.UUID)?.Price || 0
+          : 100;
+
+      let assetValue =
+        (item.JSONData.attributes.initialPropertyValue /
+          item.JSONData.attributes.initialSharePrice) *
+        currentPrice;
+
+      tempAssetValue += assetValue;
+      setTotalAssetValue(tempAssetValue);
+
+      return {
+        UUID: item.UUID,
+        Name: item.Name,
+        propertyType,
+        initialSharePrice,
+        currentPrice,
+        totalShares,
+        availableShares,
+        dividend: item.JSONData.attributes.dividendPerNFT,
+        status: item.Status,
+        Location: item.Location,
+        cover: item.NFTImage,
+      };
+    });
+  }, [properties, priceData, onChainMasterEditionData]);
+
+  // Generate property types dynamically
+  const propertyTypes = useMemo(() => {
+    const uniqueTypes = Array.from(
+      new Set(processedProperties.map((item) => item.propertyType))
+    );
+    return uniqueTypes.map((type) => ({
+      uid: type.toLowerCase(),
+      name: type.charAt(0).toUpperCase() + type.slice(1),
+    }));
+  }, [processedProperties]);
+
+  // Generate price ranges based on current price
+  const priceRanges = useMemo(() => {
+    const prices = processedProperties.map((item) => item.currentPrice);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const rangeCount = 4;
+    const rangeSize = (maxPrice - minPrice) / rangeCount;
+
+    const ranges = [];
+    for (let i = 0; i < rangeCount; i++) {
+      const start = minPrice + i * rangeSize;
+      const end =
+        i < rangeCount - 1 ? minPrice + (i + 1) * rangeSize : Infinity;
+      const uid =
+        end !== Infinity
+          ? `${Math.floor(start)}-${Math.floor(end)}`
+          : `${Math.floor(start)}+`;
+      const name =
+        end !== Infinity
+          ? `$${Math.floor(start)} - $${Math.floor(end)}`
+          : `$${Math.floor(start)}+`;
+      ranges.push({ uid, name });
+    }
+    return ranges;
+  }, [processedProperties]);
+
+  const columns = [
+    { uid: "cover", name: "" },
+    { uid: "Name", name: "Property Name" },
+    { uid: "propertyType", name: "Property Type" },
+    { uid: "status", name: "Status" },
+    { uid: "currentPrice", name: "Current Price" },
+    { uid: "growth", name: "Growth" },
+    { uid: "dividend", name: "Dividend" },
+    { uid: "availableShares", name: "Available Shares" },
+    { uid: "actions", name: "Actions" },
+  ];
+
+  interface Property {
+    UUID: string;
+    Name: string;
+    propertyType: string;
+    initialSharePrice: number;
+    currentPrice: number;
+    availableShares: number;
+    dividend: number;
+    status: string;
+  }
+
+  const [filterValue, setFilterValue] = useState("");
+  const [propertyTypeFilter, setPropertyTypeFilter] = useState<Selection>(
     new Set(["all"])
   );
-  const [locationFilter, setLocationFilter] = React.useState<Selection>(
-    new Set(["all"])
-  );
-  const [priceFilter, setPriceFilter] = React.useState<Selection>(
-    new Set(["all"])
-  );
-  const [sortDescriptor, setSortDescriptor] = React.useState<SortDescriptor>({
-    column: "propertyName",
+  const [priceFilter, setPriceFilter] = useState<Selection>(new Set(["all"]));
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: "Name",
     direction: "ascending",
   });
 
-  const filteredItems = React.useMemo(() => {
-    let filtered = [...dummyData];
+  // Filter and sort items
+  const filteredItems = useMemo(() => {
+    let filtered = [...processedProperties];
 
     if (filterValue) {
       filtered = filtered.filter((item) =>
-        item.propertyName.toLowerCase().includes(filterValue.toLowerCase())
+        item.Name.toLowerCase().includes(filterValue.toLowerCase())
       );
     }
 
     if (!propertyTypeFilter.has("all")) {
       filtered = filtered.filter((item) =>
-        propertyTypeFilter.has(item.propertyType.toLowerCase())
-      );
-    }
-
-    if (!locationFilter.has("all")) {
-      filtered = filtered.filter((item) =>
-        locationFilter.has(item.country.toLowerCase())
+        Array.from(propertyTypeFilter).some(
+          (type) => type === item.propertyType.toLowerCase()
+        )
       );
     }
 
     if (!priceFilter.has("all")) {
       filtered = filtered.filter((item) => {
-        const price = parseFloat(item.ticketPrice.replace("$", ""));
+        const price = item.currentPrice;
         return Array.from(priceFilter).some((range) => {
-          const [min, max] = range.split("-").map(Number);
-          return price >= min && (max ? price <= max : true);
+          const [minStr, maxStr] = range.split("-");
+          const min = parseFloat(minStr);
+          const max = maxStr ? parseFloat(maxStr) : Infinity;
+          return price >= min && price <= max;
         });
       });
     }
 
     return filtered;
-  }, [filterValue, propertyTypeFilter, locationFilter, priceFilter]);
+  }, [filterValue, propertyTypeFilter, priceFilter, processedProperties]);
 
-  const sortedItems = React.useMemo(() => {
+  const sortedItems = useMemo(() => {
     return [...filteredItems].sort((a, b) => {
       const first = a[sortDescriptor.column as keyof Property];
       const second = b[sortDescriptor.column as keyof Property];
       let cmp: number;
 
       switch (sortDescriptor.column) {
-        case "propertyName":
+        case "Name":
         case "propertyType":
-          cmp = first.localeCompare(second);
+        case "status":
+          cmp = (first as string).localeCompare(second as string);
           break;
-        case "location":
-          // Group by country first, then sort alphabetically by city
-          const [cityA, countryA] = (a.location as string).split(", ");
-          const [cityB, countryB] = (b.location as string).split(", ");
-          cmp = countryA.localeCompare(countryB) || cityA.localeCompare(cityB);
-          break;
-        case "ticketPrice":
         case "currentPrice":
-          const isNotTradingA = (first as string).includes("Not Trading");
-          const isNotTradingB = (second as string).includes("Not Trading");
-
-          if (isNotTradingA && isNotTradingB) {
-            cmp = 0; // Both are "Not Trading"
-          } else if (isNotTradingA) {
-            cmp = 1; // "Not Trading" comes after
-          } else if (isNotTradingB) {
-            cmp = -1; // "Not Trading" comes after
-          } else {
-            // Both have prices, extract and compare
-            const priceA = parseFloat(
-              (first as string).replace(/[^0-9.-]+/g, "")
-            );
-            const priceB = parseFloat(
-              (second as string).replace(/[^0-9.-]+/g, "")
-            );
-            cmp = priceA - priceB;
-          }
+        case "dividend":
+        case "availableShares":
+          cmp = (first as number) - (second as number);
           break;
-
-        case "totalShares":
-          const availableSharesA = parseInt((first as string).split(" / ")[0]);
-          const availableSharesB = parseInt((second as string).split(" / ")[0]);
-          cmp = availableSharesA - availableSharesB;
+        case "growth":
+          const growthA =
+            ((a.currentPrice - a.initialSharePrice) / a.initialSharePrice) *
+            100;
+          const growthB =
+            ((b.currentPrice - b.initialSharePrice) / b.initialSharePrice) *
+            100;
+          cmp = growthA - growthB;
           break;
-
         default:
           cmp = 0;
       }
@@ -223,9 +267,95 @@ export default function PropertyTable() {
       switch (columnKey) {
         case "actions":
           return (
-            <button className="px-4 py-2 font-bold text-white bg-black border-2 border-black rounded-full hover:bg-white hover:text-black">
-              View
-            </button>
+            <div className="flex flex-row items-center justify-center gap-x-4">
+              <button
+                className="px-4 py-2 font-bold text-white bg-black border-2 border-black rounded-full hover:bg-white hover:text-black"
+                onClick={() => {
+                  navigate("/property/view/" + item.UUID);
+                  // open in new tab
+                  // window.open(`/property/${item.UUID}`, "_blank");
+                }}
+              >
+                View & Buy
+              </button>
+            </div>
+          );
+        case "currentPrice":
+          let priceInSOL = cellValue * 0.0063732831968389;
+          // return `$${cellValue} / ${priceInSOL.toFixed(3)} SOL`;
+          return (
+            <div className="flex flex-row items-center w-full gap-2">
+              {/* sol  */}
+              {/* <div className="flex flex-row items-center gap-x-4">
+                <img src={solCoin} alt="SOL" className="w-6 h-6" />
+                <p className="w-24 font-bold">
+                  {priceInSOL.toFixed(3)}{" "}
+                  <span className="font-normal">SOL</span>
+                </p>
+              </div> */}
+              {/* stable coins */}
+              <div className="flex flex-row items-center gap-x-">
+                <div className="flex flex-row items-center gap-x-2">
+                  <img src={usdcCoin} alt="SOL" className="w-6 h-6" />
+                  {/* <img src={usdtCoin} alt="SOL" className="w-6 h-6" /> */}
+                </div>
+                <p className="ml-3 font-bold ">
+                  <span className="font-normal">$</span> {cellValue}
+                </p>
+              </div>
+            </div>
+          );
+        case "growth":
+          const initialPrice = item.initialSharePrice;
+          const currentPrice = item.currentPrice;
+          const growth = ((currentPrice - initialPrice) / initialPrice) * 100;
+          return (
+            <p className="flex flex-row items-center gap-2">
+              <FontAwesomeIcon
+                icon={growth > 0 ? faArrowTrendUp : faArrowTrendDown}
+                color={growth > 0 ? "green" : "red"}
+              />
+              &nbsp;{growth.toFixed(1)}%
+            </p>
+          );
+        case "availableShares":
+          return `${item.availableShares}`;
+        case "dividend":
+          return `${cellValue}%`;
+        case "Name":
+          return (
+            <div className="flex flex-col gap-y-0">
+              <p>{cellValue}</p>
+              <p className="text-xs text-gray-500">{item.Location}</p>
+            </div>
+          );
+          break;
+        case "propertyType":
+          switch (cellValue) {
+            case "residential":
+              return "Residential";
+            case "commercial":
+              return "Commercial";
+            case "industrial":
+              return "Industrial";
+            case "emptyPlot":
+              return "Empty Plot";
+            case "farmingLand":
+              return "Farming Land";
+            default:
+              return cellValue;
+          }
+        case "status":
+          return cellValue.charAt(0).toUpperCase() + cellValue.slice(1);
+        case "cover":
+          return (
+            <div className="flex flex-row items-center justify-center w-12 h-12 bg-gray-200 rounded-lg">
+              <img
+                src={item.cover}
+                alt="Property"
+                className="w-12 h-12 rounded-lg"
+              />
+            </div>
           );
         default:
           return cellValue;
@@ -243,12 +373,15 @@ export default function PropertyTable() {
         </div>
         <div className="text-right">
           <p className="text-2xl">Total Asset Value</p>
-          <p className="text-5xl font-bold">₹ 8,56,52,600</p>
+          <p className="text-5xl font-bold">
+            ${Math.round(totalAssetValue).toLocaleString()}
+          </p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-4 mt-8 mb-6">
-        <div className="flex flex-row gap-x-4">
+      <div className="flex flex-col items-center justify-between gap-4 mt-8 mb-6 md:flex-row">
+        <div className="flex flex-wrap gap-4">
+          {/* Property Type Filter */}
           <Dropdown>
             <DropdownTrigger>
               <Button
@@ -273,30 +406,7 @@ export default function PropertyTable() {
             </DropdownMenu>
           </Dropdown>
 
-          <Dropdown>
-            <DropdownTrigger>
-              <Button
-                endContent={<ChevronDownIcon />}
-                variant="flat"
-                className="h-12 text-md"
-              >
-                Location
-              </Button>
-            </DropdownTrigger>
-            <DropdownMenu
-              disallowEmptySelection
-              selectedKeys={locationFilter}
-              selectionMode="multiple"
-              onSelectionChange={setLocationFilter}
-              closeOnSelect={false}
-            >
-              <DropdownItem key="all">All Locations</DropdownItem>
-              {locations.map((location) => (
-                <DropdownItem key={location.uid}>{location.name}</DropdownItem>
-              ))}
-            </DropdownMenu>
-          </Dropdown>
-
+          {/* Price Filter */}
           <Dropdown>
             <DropdownTrigger>
               <Button
@@ -322,21 +432,21 @@ export default function PropertyTable() {
           </Dropdown>
         </div>
 
+        {/* Search Input */}
         <Input
           className="w-full max-w-lg text-xl"
-          placeholder="Search for a property by name, location, etc..."
+          placeholder="Search for a property by name"
           startContent={<SearchIcon />}
           value={filterValue}
           onValueChange={setFilterValue}
           size="lg"
         />
       </div>
-
       <Table
-        // isStriped
         aria-label="Property investment table"
         sortDescriptor={sortDescriptor}
         onSortChange={setSortDescriptor}
+        isStriped
       >
         <TableHeader columns={columns}>
           {(column) => (
@@ -350,9 +460,9 @@ export default function PropertyTable() {
             </TableColumn>
           )}
         </TableHeader>
-        <TableBody items={sortedItems}>
+        <TableBody items={sortedItems} className="">
           {(item) => (
-            <TableRow key={item.id}>
+            <TableRow key={`${item.UUID}-${item.currentPrice}`} className="">
               {(columnKey) => (
                 <TableCell className="text-md">
                   {renderCell(item, columnKey)}

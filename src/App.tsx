@@ -4,7 +4,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   ConnectionProvider,
   WalletProvider,
@@ -13,6 +13,7 @@ import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import {
   PhantomWalletAdapter,
   UnsafeBurnerWalletAdapter,
+  SolflareWalletAdapter,
 } from "@solana/wallet-adapter-wallets";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { clusterApiUrl } from "@solana/web3.js";
@@ -33,11 +34,38 @@ import History from "./components/custom/dashboard/pages/History";
 import PropertyView from "./pages/PropertyView";
 import Dummy from "./pages/admin-only/basic/Dummy";
 import CandyMachine from "./pages/admin-only/candy-machine/CandyMachine";
+import HowItWorks from "./pages/HowItWorks";
+import WalletOverlay from "./components/custom/WalletOverlay";
+
+import { useNavigate } from "react-router-dom";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import {
+  useWalletOverlayStore,
+  useLoadingStore,
+} from "./state-management/store";
+import TopBanner from "./components/custom/TopBanner";
+import Waitlist from "./pages/Waitlist";
+import LoadingOverlay from "./components/custom/LoadingOverlay";
+
+import { usePropertiesStore } from "./state-management/store";
+import Sell from "./components/custom/dashboard/pages/Sell";
+import Transfer from "./components/custom/dashboard/pages/Transfer";
 
 function App() {
   // The network can be set to 'devnet', 'testnet', or 'mainnet-beta'.
   const network = WalletAdapterNetwork.Devnet;
   const location = useLocation();
+  const navigate = useNavigate();
+  const { connection } = useConnection();
+  // const { publicKey } = useWallet();
+  const { showWalletOverlay, setShowWalletOverlay } = useWalletOverlayStore();
+  const { isLoading } = useLoadingStore();
+
+  const { fetchProperties } = usePropertiesStore();
+
+  // useEffect(() => {
+  //   fetchProperties();
+  // }, []);
 
   // You can also provide a custom RPC endpoint.
   // const endpoint = useMemo(() => clusterApiUrl(network), [network]);
@@ -55,16 +83,49 @@ function App() {
   console.log("endpoint", endpoint);
 
   const wallets = useMemo(
-    () => [],
+    () => [
+      new PhantomWalletAdapter(),
+      // new SolflareWalletAdapter(),
+      // new UnsafeBurnerWalletAdapter(),
+    ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [network]
   );
+
+  useEffect(() => {
+    console.log("Backend URL: ", import.meta.env.VITE_BACKEND_URL);
+  }, []);
+
+  // useEffect(() => {
+  //   console.log("Update in Public Key and Connection: ", publicKey, connection);
+  //   if (
+  //     location.pathname.includes("/dashboard") &&
+  //     (!connection || !publicKey)
+  //   ) {
+  //     // setShowWalletOverlay(true);
+  //     navigate("/");
+  //   }
+  //   if (connection && publicKey) {
+  //     // setShowWalletOverlay(false);
+  //     navigate("/dashboard");
+  //   }
+  // }, [publicKey, connection]);
 
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
+          {location.pathname.includes("/dashboard") ? null : <TopBanner />}
+
+          {
+            // Loading overlay
+            isLoading ? <LoadingOverlay /> : null
+          }
           <Toaster />
+          {
+            // Wallet overlay modal
+            showWalletOverlay ? <WalletOverlay /> : null
+          }
           {
             // Navbar component
             location.pathname.includes("/dashboard") ? null : <Navbar />
@@ -128,10 +189,32 @@ function App() {
                   </AuthMiddleware>
                 }
               />
+              <Route
+                path="/dashboard/sell"
+                element={
+                  <AuthMiddleware>
+                    <Dashboard>
+                      <Sell />
+                    </Dashboard>
+                  </AuthMiddleware>
+                }
+              />
+              <Route
+                path="/dashboard/transfer"
+                element={
+                  <AuthMiddleware>
+                    <Dashboard>
+                      <Transfer />
+                    </Dashboard>
+                  </AuthMiddleware>
+                }
+              />
 
               <Route path="/property/view/:id" element={<PropertyView />} />
               <Route path="/dummy" element={<Dummy />} />
               <Route path="/candy-machine" element={<CandyMachine />} />
+              <Route path="/how-it-works" element={<HowItWorks />} />
+              <Route path="/waitlist" element={<Waitlist />} />
             </Routes>
           </div>
           {/* <WalletMultiButton /> */}

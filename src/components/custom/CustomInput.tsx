@@ -1,5 +1,3 @@
-"use client";
-
 import { PlaceholdersAndVanishInput } from "../aceternity/VanishInput";
 
 export function PlaceholdersAndVanishInputDemo() {

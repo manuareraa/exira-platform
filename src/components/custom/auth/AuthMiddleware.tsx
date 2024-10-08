@@ -2,9 +2,7 @@
 
 import React, { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-
-/**
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";/**
  * Props for AuthMiddleware component.
  * @property {ReactNode} children - The child components to be rendered if the user is authenticated.
  */
